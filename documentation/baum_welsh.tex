@@ -1,0 +1,263 @@
+\documentclass{article}
+% ============= Page size margins etc.
+% ============= This offers great flexibility in terms of document size
+\usepackage{geometry}
+\geometry{twoside,
+          letterpaper, % i.e, paperwidth=210mm and paperheight=297mm,
+          top=25mm,
+          bottom=40mm,
+          left=25mm,
+          right=25mm,
+}
+% =========== Math related stuff
+% There are more tools for handling fractions etc.
+% but can be left out until the need is obvious
+\usepackage{mathtools} %<- Fixes, enhances amsmath package (loads amsmath too so no need to load it)
+\usepackage{amssymb,amsthm}% Standard AMS tools
+\usepackage{algorithm,algorithmic}
+\usepackage[toc,page]{appendix}
+
+% =========== Graphics-related stuff
+\usepackage{graphicx} % don't load epsfig or psfig
+\usepackage[colorlinks = true,
+            linkcolor = blue,
+            urlcolor  = blue,
+            citecolor = blue,
+            anchorcolor = blue]{hyperref}
+
+\usepackage{xcolor}
+
+\setlength{\parskip}{1em}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+\author{Nick Hoernle}
+\title{Description and Implementation of Parameter Estimation for a Switching State-Space Model of Connected Worlds}
+\maketitle
+
+\section{Introduction to Hidden Markov Models}
+A time-series is data that is obtained sequentially. Often the data have equal intervals between samples, and I am assuming this is true for this introduction. It is a fair assumption to make as the data can be re-sampled to present a uniformaly sampled dataset. When the time series is represented by an output vector, we let $\bar{\mathbf{y}_t}$ denote the vector of sampled values at time $t$.
+
+A Hidden Markov Model (HMM) presents a framework for representing the joint probability distribution over a sequential collection of hidden and observed discrete random variables ($\bar{\mathbf{X}}$ and $\bar{\mathbf{y}}$ respectively) \cite{ghahramani2001introduction}. The above equal sampling assumption allows us to denote $t$ an integer-valued time index that specifies one observation output. Note that a \textbf{Hidden Markov Model (HMM)} refers to the case where the states and output variables are assumed to be discrete, whereas a \textbf{State-Space Model (SSM)} refers to the case where the states and associated outputs are continuous valued. The update steps and math intuition behind both of these cases is analogous and I will refer to the models exchangeably throughout the equation derviation. I however, will refer strictly to the SSM when referring to continuous valued states and observations and the HMM when referring to the discrete valued switching variable that is preset in the switching state-space model. Is is worth introducing at this stage, the power of the switching SSM is such that it combines the continuous nature of the SSM with the discrete nature of the HMM, allowing effecting non-linear modelling from linear models.
+
+The response vector is from an auto-regressive system that contains variables that are dependent upon one another and are dependent on their histories. An initial and general implementation can model this system as a Markov chain where the water level at time $t$ is independent from all water levels $1 \hdots t-2$ given the value of the water at time $t-1$. In the case of Connected Worlds, this is a reasonable assumption as the water flows can only depend on the previous levels of water in the system and on the user actions that dictate how the water should move from one Biome to another. Note that I have specifically chosen to model the system as a Hidden Markov Model (HMM) as this will all for a more general modelling approach when we choose to include more of the inter-dependent response variables (plants and animals).
+
+For this discussion I have followed the notation and derivation of the fitering equatons presented by Shumway and Stoffer \cite{shumway2006time}. Following the notation for a first order HMM, we have the following state representation for the system:
+
+\begin{equation}\label{eq:hmm_first_order}
+  \begin{split}
+      \mathbf{X_t} &= \Phi\mathbf{X_{t-1}} + w_t \\
+      \mathbf{y_t} &= A\mathbf{X_t} + v_t
+  \end{split}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\mathbf{X_t}$ denotes the state vector at time $t$.
+    \item $\mathbf{y_t}$ denotes the observed output vector at time $t$.
+    \item $A$ is the observation matrix of the state space model and denotes the linear transform of the state vector $\mathbf{X_t}$ to the observed vector $\mathbf{y_t}$.
+    \item $w_t$ is independently sampled random noise between state transitions, for the linear Gaussian state-space model, $w_t \sim \mathcal{N}(0, \mathcal{Q})$.
+    \item $\nu_t$ is independently sampled random noise between state transitions, for the linear Gaussian state-space model, $\nu_t \sim \mathcal{N}(0, \mathcal{R})$.
+    \item $\Phi$ denotes the transition matrix that governs the dynamics of the system from the state at time $t$ to the state at time $t+1$.
+\end{itemize}
+
+It is useful to denote
+\begin{equation}\label{eq:expected_val_x_given_output}
+x_t^s = E(x_t \vert y_{1:s})
+\end{equation}
+
+\begin{equation}\label{eq:expected_variance_x_given_output}
+P_{t_1, t_2}^s = E[(x_{t_1} - x_{t_1}^s)(x_{t_2} - x_{t_2}^s)^T)
+\end{equation}
+
+Equation \ref{eq:expected_val_x_given_output} gives the expected value for the state at time $t$ that depends on the observations $y_1, \dots, y_s$. Equation \ref{eq:expected_variance_x_given_output} gives the covariance matrix of two observations at different times. $P_{t}^s$ is used to denote the covariance of the data for $t_1 = t_2 = t$.
+
+The structure of the state-space model presents an efficient conditional factorization of the joint probability distribution. The structure of the state-space model can be represented graphically, as shown in Figure \ref{fig:basic_ssm}
+
+\begin{figure}
+\center
+\includegraphics[width=12cm]{../baseline_model/generated_images/basic_ssm.png}
+\caption{A state-space model is a directed acyclic graph (DAG) where the observations and states are structured such that there exists a conditional independence between any observation at time $t$ and the rest of the graph given the state of the system at time $t$. There further exists a conditional independence between any state and all previous states, given the parent state of the system.}\label{fig:basic_ssm}
+\end{figure}
+
+The problem of inference or state estimation for a state-space model with known parameters consists of estimating the posterior probabilities of the hidden variables given a sequence of observed values. The state-space inference problem can be broken into \textit{filtering}, \textit{smoothing} and \textit{prediction} \cite{ghahramani2000variational}. The goal of filtering is using all the data up to time $t$ to calculate the probability of the hidden state $X_t$. Smoothing, aims to use all of the data available from time $1 \hdots T$ (with $T > t$) to calculate the probability of $X_t$. Lastly, prediction is calculating the probability of the future states $X_{t+1}$ given all the data $1 \hdots t$ \cite{anderson1979optimal}. We are not concerned with prediction for this implementation.
+
+Modelling the data in this framework also puts the data in a generative setting where the data can be generated by some Markov chain with known properties. Suppose with $Phi, \mu_0, \mathcal{Q}, \mathcal{R}$ given, we follow equation \ref{eq:hmm_first_order} to generate data for $t = 1 \hdots T$. We obtain generated data that is depected in figure \ref{fig:generated_data_simple_ssm}.
+
+\begin{figure}
+\center
+\includegraphics[width=15cm]{../baseline_model/generated_images/generated_data_simple_ssm.png}
+\caption{Data can be seen to be a simple random walk with the 5 co-dependent water levels.}\label{fig:generated_data_simple_ssm}
+\end{figure}
+
+\section{Description of the Baum-Welsh (Expectation Maximization) algorithm}
+The problem of learning the parameters of a state-space model can be done via a maximum likelihood approach, in which a single value for the parameters is estimated. Note that that the fully Bayesian approach treats the parameters as random variables themselves and either computes or approximates the posterior distribution of the parameters given the data \cite{ghahramani2000variational}. An implementation of the maximum likelihood method for extimating the parameters of the state-space model can be found \href{https://github.com/NickHoernle/Essil/blob/master/baseline_model/switching-state-space-model.ipynb}{in this notebook}.
+
+Expectation Maximization (EM) presents an alternative method for off-line learning of the parameters involved with the state transition and the noise governing the transitions and the observations in the system. We rather follow an Expectation Maximisation approach to solve for the state transition matrix given the observation data $\mathbf{y}$ and the hidden state data $\mathbf{X}$. The implementation of this code can be found \href{https://github.com/NickHoernle/Essil/blob/master/baseline_model/baum_welch_algorithm.ipynb}{in this notebook}.
+
+Given the parameters in $\Phi$ we are able to calculate the Complete Data Likelihood from $\{ \mathbf{X_{0:n}}, \mathbf{y_{1:n}} \}$:
+
+\begin{equation}\label{eq:complete_data_likelihood}
+p_\Theta (\mathbf{X_{0:n}}, \mathbf{y_{1:n}}) = p_{\mu_0, \Sigma_0}(\mathbf{X_0}) \prod\limits_{t=1}^{n} p_{\Phi, \mathbf{Q}} ( \mathbf{X_t} \vert \mathbf{X_{t-1}} )  p_{R} (  \mathbf{y_t} \vert  \mathbf{X_t} )
+\end{equation}
+
+Using the Gaussian assumptions that are given above, and ignoring constants, we have the complete data negative log-likelihood:
+
+\begin{equation}\label{eq:complete_data_log_likelihood}
+  \begin{split}
+-2 L_{X,Y}(\Theta) &= ln( \vert \Sigma_0 \vert ) + (X_0 - \mu_0)^T\Sigma_0^{-1}(X_0 - \mu_0) \\
+&+ n ln(\vert Q \vert ) + \sum\limits_{t=1}^{n} (X_t - \Phi X_{t-1})^T Q^{-1} (X_t - \Phi X_{t-1}) \\
+&+ n ln(\vert R \vert ) + \sum\limits_{t=1}^{n} (y_t - A X_{t})^T R^{-1} (y_t - A X_{t})
+  \end{split}
+\end{equation}
+
+\subsection{Baum-Welsh Implementation}
+
+\begin{algorithm}
+\caption{Baum-Welsh Expectation Maximization}\label{alg:baum_welsh}
+
+  \begin{algorithmic}
+  \STATE \textbf{Initialize:}  $\Theta = \mathbf{\{} \mu_0, \Sigma_0, \Phi, \mathcal{Q}, \mathcal{R} \mathbf{\}}$
+    \WHILE{$- \ln_y (\Theta^{(j)})$ not converged}
+    \STATE Perform E step using $\Theta^{j-1}$ to calculate outputs from the mean and variance-covariance state estimates which are the output from the Kalman smoother $X^n_t$, $P^n_t$ and $P^n_{t, t-1}$.
+
+    \STATE Perform the M step to update $\Theta = \mathbf{\{} \mu_0, \Sigma_0, \Phi, \mathcal{Q}, \mathcal{R} \mathbf{\}}$ using the MLE from the complete-data likelihood.
+
+    \STATE Compute the incomplete-data likelihood.
+    \ENDWHILE
+  \end{algorithmic}
+\end{algorithm}
+
+Algorithm \ref{alg:baum_welsh} can be implemented on the generated data and the parameters for $\Phi$, the transition matrix and $\mathcal{Q}$ the state transition noise can be approximated from the MLE approach. Note that the expectation step, to calculate the mean and variance state estimates are provided in Appendix \ref{kalman_filter_upadte_equations}. The result is shown in figure \ref{fig:interpolated_generated_data_simple_ssm}. It is worth noting that while the actual values in the $\hat{\Phi}$ matrix differ quite substantially from the input values $\Phi$, the eigen vector that is associated with the largest eigen value of the estimated state transition matrix is equal to the eigen vector of the original vector. This does confirm that we are recovering the transition dynamics satisfactorily.
+
+\begin{figure}
+\center
+\includegraphics[width=15cm]{../baseline_model/generated_images/interpolated_generated_data_simple_ssm.png}
+\caption{The transition matrix for the Markov chain can be learnt from the data and can be seen to approximate the system dynamics well.}\label{fig:interpolated_generated_data_simple_ssm}
+\end{figure}
+
+\section{Considering the Switching State-Space Model - Description of New Optimization Task}
+
+We can now turn to the harder problem where we assume there are distinct switch points in the time-series response data where the system characteristics undergo distinctly different transition dynamics. An intuitive explination for the need for this level of modeling is that students may be executing actions under a specific plan or strategy. If they update their plan to reflect a new solution to solving a given problem based on new insight into the state dynamics, this will result in a markedly different response from the output vector.
+
+The new state update equation describes $m = 1 \hdots \mathcal{M}$ independent state-space models that are each governed by their own transition dynamics. There is a switching variable that selects which chain (and hence plan) is active at any given time. This is summarised in equation \ref{eq:switching_state_space}, where there are $m = 1 \hdots \mathcal{M}$ models and the $S_t$ variable is a categorical that at each time step in the response that chooses which state-space equation governs the output response (note that the $S_t$ variable itself follows the discrete dynamics of a hidden markov chain itself).
+\begin{equation}\label{eq:switching_state_space}
+  \begin{split}
+      \mathbf{X^{(m)}_t} &= \Phi^{(m)}\mathbf{X^{(m)}_{t-1}} + w^{(m)}_t \\
+      \mathbf{y_t} &= S_t A^{(m)}\mathbf{X^{(m)}_t} + v^{(m)}_t
+  \end{split}
+\end{equation}
+
+The state dynamics can be summarised by the graphical model that is presented in figure \ref{fig:switching_ssm_graphical_model}.
+
+\begin{figure}
+\center
+\includegraphics[width=16cm]{../baseline_model/generated_images/switching_SSM.png}
+\caption{Graphical model for the switching-state space model described by equation \ref{eq:switching_state_space}}\label{fig:switching_ssm_graphical_model}
+\end{figure}
+
+Again, under a generative model, the data can be generated to follow the dynamics of three independent markov chains, and the switchpoints can be drawn from a uniform random variable over the total time duration that is present (for the Bayesian modeling to come, note that this is the same representation as a Poisson random variable with a rate parameter that is determined by the lenght of the duration and the expected number of splitpoints in the interval).
+
+\begin{figure}
+\center
+\includegraphics[width=15cm]{../baseline_model/generated_images/generated_data_switching_ssm.png}
+\caption{Data is generated from the switching state-space model that is described by figure \ref{fig:switching_ssm_graphical_model}. Note that the data is still a Gaussian random walk but now there are distinct switch-points where the system dynamics undergo explicit changes to the dynamics. Note that the switch times are $t=174s$ and $t=227s$ respectively.}\label{fig:generated_data_switching_ssm}
+\end{figure}
+
+Under the assumption that the switchpoints are known, $K$ Markov chains can be trained independently on the $K+1$ intervals of the response data. The resulting transition parameters are inferred from the data shown in figure \ref{fig:inferred_ssm_known_switch}.
+
+\begin{figure}
+\center
+\includegraphics[width=15cm]{../baseline_model/generated_images/inferred_ssm_known_switch.png}
+\caption{Inferred parameters from switching state-space model with known switch-points.}\label{fig:inferred_ssm_known_switch}
+\end{figure}
+
+\section{Deriving Switch-Points and Markov Chain Parameters from Switching State-Space Model}
+
+Studying the `innovations' from the forward Kalman Filter. Where:
+\begin{equation}\label{innovations}
+\text{innovation}_t = y_t - \mathbf{A} \mathbf{X^t_{t-1}}
+\end{equation}
+and $\mathbf{X^t_{t-1}}$ is derived from the forward filtering equations.
+
+I have used the information encoded in the innovations of each chain to make an iterative update algorithm to find the best position of the switch-points for a given number of switch-points. This procedure is summarized in algorithm \ref{alg:find_switch}.
+
+\begin{algorithm}
+\caption{Search for Switch-Points}\label{alg:find_switch}
+
+  \begin{algorithmic}
+  \STATE \textbf{Initialize:}  $K$ switch-points at equally spaced intervals on the time-series.
+    \WHILE{Found switch-points have not converged}
+    \STATE Use Baum-Welsh (\ref{alg:baum_welsh}) to find parameters of the chains given the known position of the switch-points.
+
+    \STATE Use the forward Kalman Filter to evaluate the innovation at time $t$ $\forall t \in [0 \hdots T]$
+
+    \STATE Evaluate the error metric from the innovations to find more appropriate switch-points for the entire chain.
+
+    \IF{the found switch-points collapse to the same point}
+      \STATE $K = K - 1$
+    \ENDIF
+    \ENDWHILE
+  \end{algorithmic}
+\end{algorithm}
+
+For the first iteration of this algorithm, the innovations can be evaluated to gain intuition into how the forward Kalman Filter gives an appropriate error metric for the data. The plotted innovations for three difference chains over time can be seen in figure \ref{fig:plot_square_innovations}. The innovations are independent Gaussian random vectors with zero means and variance-covariance matrices $\Sigma_t = A_tP^{t-1}_{t}A_t^T + R$. It is worth noting that the innovations of a Kalman Filter can be viewed in a linear regression sense, in that we are evaluating the expected value of $\mathbf{y_t | X_t, \Theta}$ and thus minimising the sum of squared errors is exactly the same as miximizing the likelihood of the given model parameters over the observed data. This is what the algorithm \ref{alg:find_switch} achieves.
+
+\begin{figure}[h]
+\center
+\includegraphics[width=15cm]{../baseline_model/generated_images/plot_square_innovations.png}
+\caption{Plot of innovations for three chains given starting switch-points that are equally spaced on the time series.}\label{fig:plot_square_innovations}
+\end{figure}
+
+The final found switch-points can be seen in figure \ref{fig:inferred_ssm_unknown_switch}.
+
+\begin{figure}
+\center
+\includegraphics[width=15cm]{../baseline_model/generated_images/inferred_ssm_unknown_switch.png}
+\caption{Learnt switchpoints and inferred SSM parameters on generated data (note that the true splitpoints were at $t=174s$ and $t=227s$ respectively.)}\label{fig:inferred_ssm_unknown_switch}
+\end{figure}
+
+\section{Demonstration on Connected Worlds Data}
+
+For this demonstration, I have used the Connected Worlds logs from \href{https://drive.google.com/drive/u/0/folders/1pQE8-VWqh9YA59NYlRJaMmADx8CxNfU5}{16/11/2017}\footnote{the session name is `12-00-37-ESSIL\_October\_Test'}. I first assume there are no switch-points that are present and I run the Baum-Welsh \ref{alg:baum_welsh} algorithm on the data. I have transformed the raw connected worlds data so that:
+
+\begin{enumerate}
+\item the total water in the system sums to 1.
+\item the water in the four biomes are shown distinctly, and the rest of the water (the wetlands, the desert, the floor and the waterfall) are shown grouped together.
+\end{enumerate}
+
+\begin{figure}
+\center
+\includegraphics[width=15cm]{../baseline_model/generated_images/inferred_CW_params_without_switch.png}
+\caption{Inferred parameters for a Connected Worlds session with no switch-points.}\label{fig:inferred_CW_params_without_switch}
+\end{figure}
+
+
+\begin{figure}
+\center
+\includegraphics[width=15cm]{../baseline_model/generated_images/inferred_CW_params_with_switch.png}
+\caption{Inferred parameters for a Connected Worlds Session with the learnt switching-points highlighted.}\label{fig:inferred_CW_params_with_switch}
+\end{figure}
+
+\begin{appendices}
+
+  \section{Kalman Filter Update Equations}\label{kalman_filter_upadte_equations}
+
+    \begin{align}\label{kalman_filter_eqns}
+      x_t^{t-1} &= \Phi x_{t-1}^{t-1} \\
+      P_t^{t-1} &= \Phi P_{t-1}^{t-1} \Phi^T + Q \\
+      x_t^t &= x_t^{t-1} + K_t \epsilon_t \\
+      \epsilon_t &= y_t - E(y_t \vert t_{1:t-1}) = y_t - x_t^{t-1} \\
+      P_t^{t} &= [I - K_t]P_t^{t-1}
+    \end{align}
+    Where:
+    \begin{equation}\label{kalman_filter_condition}
+      K_t = P_t^{t-1}[P_t^{t-1}+ R]^{-1}
+    \end{equation}
+\end{appendices}
+
+\bibliography{baum_welsh}
+\bibliographystyle{ieeetr}
+
+\end{document}

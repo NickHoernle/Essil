@@ -9,6 +9,15 @@ __pycache__/
 *.pkl
 *.csv
 
+# LATEX
+.aux
+.bbl
+.fdb_latexmk
+.blg
+.fls
+.out
+.synctex.gz
+
 # C extensions
 *.so
 

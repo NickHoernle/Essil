@@ -1,0 +1,22 @@
+\begin{thebibliography}{1}
+
+\bibitem{ghahramani2001introduction}
+Z.~Ghahramani, ``An introduction to hidden markov models and bayesian
+  networks,'' {\em International journal of pattern recognition and artificial
+  intelligence}, vol.~15, no.~01, pp.~9--42, 2001.
+
+\bibitem{shumway2006time}
+R.~H. Shumway and D.~S. Stoffer, {\em Time series analysis and its
+  applications: with R examples}.
+\newblock Springer Science \& Business Media, 2006.
+
+\bibitem{ghahramani2000variational}
+Z.~Ghahramani and G.~E. Hinton, ``Variational learning for switching
+  state-space models,'' {\em Neural computation}, vol.~12, no.~4, pp.~831--864,
+  2000.
+
+\bibitem{anderson1979optimal}
+B.~D. Anderson and J.~B. Moore, ``Optimal filtering,'' {\em Englewood Cliffs},
+  vol.~21, pp.~22--95, 1979.
+
+\end{thebibliography}

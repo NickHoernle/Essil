@@ -1,0 +1,71 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{ghahramani2001introduction}
+\citation{shumway2006time}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction to Hidden Markov Models}{1}{section.1}}
+\citation{ghahramani2000variational}
+\citation{anderson1979optimal}
+\citation{ghahramani2000variational}
+\newlabel{eq:hmm_first_order}{{1}{2}{Introduction to Hidden Markov Models}{equation.1.1}{}}
+\newlabel{eq:expected_val_x_given_output}{{2}{2}{Introduction to Hidden Markov Models}{equation.1.2}{}}
+\newlabel{eq:expected_variance_x_given_output}{{3}{2}{Introduction to Hidden Markov Models}{equation.1.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces A state-space model is a directed acyclic graph (DAG) where the observations and states are structured such that there exists a conditional independence between any observation at time $t$ and the rest of the graph given the state of the system at time $t$. There further exists a conditional independence between any state and all previous states, given the parent state of the system.}}{3}{figure.1}}
+\newlabel{fig:basic_ssm}{{1}{3}{A state-space model is a directed acyclic graph (DAG) where the observations and states are structured such that there exists a conditional independence between any observation at time $t$ and the rest of the graph given the state of the system at time $t$. There further exists a conditional independence between any state and all previous states, given the parent state of the system}{figure.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Data can be seen to be a simple random walk with the 5 co-dependent water levels.}}{3}{figure.2}}
+\newlabel{fig:generated_data_simple_ssm}{{2}{3}{Data can be seen to be a simple random walk with the 5 co-dependent water levels}{figure.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Description of the Baum-Welsh (Expectation Maximization) algorithm}{4}{section.2}}
+\newlabel{eq:complete_data_likelihood}{{4}{4}{Description of the Baum-Welsh (Expectation Maximization) algorithm}{equation.2.4}{}}
+\newlabel{eq:complete_data_log_likelihood}{{5}{4}{Description of the Baum-Welsh (Expectation Maximization) algorithm}{equation.2.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Baum-Welsh Implementation}{4}{subsection.2.1}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Baum-Welsh Expectation Maximization}}{4}{algorithm.1}}
+\newlabel{alg:baum_welsh}{{1}{4}{Baum-Welsh Implementation}{algorithm.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces The transition matrix for the Markov chain can be learnt from the data and can be seen to approximate the system dynamics well.}}{5}{figure.3}}
+\newlabel{fig:interpolated_generated_data_simple_ssm}{{3}{5}{The transition matrix for the Markov chain can be learnt from the data and can be seen to approximate the system dynamics well}{figure.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Considering the Switching State-Space Model - Description of New Optimization Task}{5}{section.3}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Graphical model for the switching-state space model described by equation \ref  {eq:switching_state_space}}}{6}{figure.4}}
+\newlabel{fig:switching_ssm_graphical_model}{{4}{6}{Graphical model for the switching-state space model described by equation \ref {eq:switching_state_space}}{figure.4}{}}
+\newlabel{eq:switching_state_space}{{6}{6}{Considering the Switching State-Space Model - Description of New Optimization Task}{equation.3.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Deriving Switch-Points and Markov Chain Parameters from Switching State-Space Model}{6}{section.4}}
+\newlabel{innovations}{{7}{6}{Deriving Switch-Points and Markov Chain Parameters from Switching State-Space Model}{equation.4.7}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Data is generated from the switching state-space model that is described by figure \ref  {fig:switching_ssm_graphical_model}. Note that the data is still a Gaussian random walk but now there are distinct switch-points where the system dynamics undergo explicit changes to the dynamics. Note that the switch times are $t=174s$ and $t=227s$ respectively.}}{7}{figure.5}}
+\newlabel{fig:generated_data_switching_ssm}{{5}{7}{Data is generated from the switching state-space model that is described by figure \ref {fig:switching_ssm_graphical_model}. Note that the data is still a Gaussian random walk but now there are distinct switch-points where the system dynamics undergo explicit changes to the dynamics. Note that the switch times are $t=174s$ and $t=227s$ respectively}{figure.5}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Inferred parameters from switching state-space model with known switch-points.}}{8}{figure.6}}
+\newlabel{fig:inferred_ssm_known_switch}{{6}{8}{Inferred parameters from switching state-space model with known switch-points}{figure.6}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Search for Switch-Points}}{9}{algorithm.2}}
+\newlabel{alg:find_switch}{{2}{9}{Deriving Switch-Points and Markov Chain Parameters from Switching State-Space Model}{algorithm.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Demonstration on Connected Worlds Data}{9}{section.5}}
+\bibdata{baum_welsh}
+\bibcite{ghahramani2001introduction}{1}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Plot of innovations for three chains given starting switch-points that are equally spaced on the time series.}}{10}{figure.7}}
+\newlabel{fig:plot_square_innovations}{{7}{10}{Plot of innovations for three chains given starting switch-points that are equally spaced on the time series}{figure.7}{}}
+\@writefile{toc}{\contentsline {section}{Appendices}{10}{section*.1}}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Kalman Filter Update Equations}{10}{Appendix.a.A}}
+\newlabel{kalman_filter_upadte_equations}{{A}{10}{Kalman Filter Update Equations}{Appendix.a.A}{}}
+\newlabel{kalman_filter_eqns}{{8}{10}{Kalman Filter Update Equations}{equation.a.A.8}{}}
+\newlabel{kalman_filter_condition}{{13}{10}{Kalman Filter Update Equations}{equation.a.A.13}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Learnt switchpoints and inferred SSM parameters on generated data (note that the true splitpoints were at $t=174s$ and $t=227s$ respectively.)}}{11}{figure.8}}
+\newlabel{fig:inferred_ssm_unknown_switch}{{8}{11}{Learnt switchpoints and inferred SSM parameters on generated data (note that the true splitpoints were at $t=174s$ and $t=227s$ respectively.)}{figure.8}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Inferred parameters for a Connected Worlds session with no switch-points.}}{12}{figure.9}}
+\newlabel{fig:inferred_CW_params_without_switch}{{9}{12}{Inferred parameters for a Connected Worlds session with no switch-points}{figure.9}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Inferred parameters for a Connected Worlds Session with the learnt switching-points highlighted.}}{13}{figure.10}}
+\newlabel{fig:inferred_CW_params_with_switch}{{10}{13}{Inferred parameters for a Connected Worlds Session with the learnt switching-points highlighted}{figure.10}{}}
+\bibcite{shumway2006time}{2}
+\bibcite{ghahramani2000variational}{3}
+\bibcite{anderson1979optimal}{4}
+\bibstyle{ieeetr}

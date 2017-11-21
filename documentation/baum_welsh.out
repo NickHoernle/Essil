@@ -1,0 +1,8 @@
+\BOOKMARK [1][-]{section.1}{Introduction to Hidden Markov Models}{}% 1
+\BOOKMARK [1][-]{section.2}{Description of the Baum-Welsh \(Expectation Maximization\) algorithm}{}% 2
+\BOOKMARK [2][-]{subsection.2.1}{Baum-Welsh Implementation}{section.2}% 3
+\BOOKMARK [1][-]{section.3}{Considering the Switching State-Space Model - Description of New Optimization Task}{}% 4
+\BOOKMARK [1][-]{section.4}{Deriving Switch-Points and Markov Chain Parameters from Switching State-Space Model}{}% 5
+\BOOKMARK [1][-]{section.5}{Demonstration on Connected Worlds Data}{}% 6
+\BOOKMARK [1][-]{section*.1}{Appendices}{}% 7
+\BOOKMARK [1][-]{Appendix.a.A}{Kalman Filter Update Equations}{}% 8
