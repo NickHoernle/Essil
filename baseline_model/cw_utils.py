@@ -76,6 +76,7 @@ def ForwardKalmanFilter(ys, mu0, Sig0, Phi, Q, R, **kwargs):
                 Phi = Phi,
                 Q = Q,
                 R = R,
+                N = kwargs['N'],
                 weight = kwargs['weights'][i]
             )
         else:
@@ -85,7 +86,8 @@ def ForwardKalmanFilter(ys, mu0, Sig0, Phi, Q, R, **kwargs):
                 P_tmin1_tmin1 = Ps[i],
                 Phi = Phi,
                 Q = Q,
-                R = R
+                R = R,
+                N = kwargs['N']
             )
 
         x_t_t = param_update['x_t_t']
@@ -299,7 +301,7 @@ def ExpectationMaximisation(ys, starting_params, **kwargs):
 
     return params, lklihoods
 
-def learn_breakpoint(ys, num_breaks, starting_params, percentage=98):
+def learn_breakpoint(ys, num_breaks, starting_params, percentage=98, sensitivity=2):
 
     T = len(ys)
     break_points = []
@@ -309,7 +311,8 @@ def learn_breakpoint(ys, num_breaks, starting_params, percentage=98):
     break_points.append(breaks)
 
     # iterate to find the new breaks
-    for i in range(15):
+    penalty = 0
+    for k in range(20):
 
         print(breaks)
         result_params, fwd_filts = [], []
@@ -317,7 +320,7 @@ def learn_breakpoint(ys, num_breaks, starting_params, percentage=98):
         try:
             for j in range(1, len(breaks)):
 
-                p_, _ = ExpectationMaximisation(ys[breaks[j-1]:breaks[j]], copy.deepcopy(starting_params))
+                p_, _ = ExpectationMaximisation(ys[breaks[j-1]:breaks[j]], copy.deepcopy(starting_params), N=starting_params['N'])
                 result_params.append(p_)
 
                 fwd_filt = ForwardKalmanFilter(
@@ -326,7 +329,8 @@ def learn_breakpoint(ys, num_breaks, starting_params, percentage=98):
                             p_['Sig0'],
                             p_['Phi'],
                             p_['Q'],
-                            p_['R']
+                            p_['R'],
+                            N=starting_params['N']
                         )
 
                 fwd_filts.append(fwd_filt)
@@ -335,21 +339,35 @@ def learn_breakpoint(ys, num_breaks, starting_params, percentage=98):
 
             if num_breaks > 1:
                 ## TODO: Seriously you need to make a better boundary decision than this.
-                breaks = np.concatenate([[0], [int(np.percentile(np.where(np.argmin(errs, axis=1) == i), percentage)) for i in range(num_breaks)][:num_breaks-1], [T]])
+                breaks = [0]
+                for i in range(1, num_breaks):
+
+                    if penalty <= np.floor(np.mean(np.diff(breaks) * 0.1)):
+                        penalty += sensitivity
+                    # how heavily are we penalising outliers?
+                    max_ = np.sort(np.where(np.argmin(errs, axis=1) == i-1))[0][-(penalty+1)]
+                    min_ = np.sort(np.where(np.argmin(errs, axis=1) == i))[0][penalty]
+                    # print('updating:', min_, max_)
+                    breaks.append((max_ + min_)//2)
+                breaks.append(T)
+                breaks = np.array(np.sort(breaks))
+
             else:
+                print('only two breaks')
                 breaks = np.concatenate([[0],[T]])
 
-            if len(np.where(np.diff(breaks) < 30)[0]) > 0:
+            if len(np.where(np.diff(breaks) < 20)[0]) > 0:
 
-                remove = np.where(np.diff(breaks) < 30)[0][-1]
-                print(remove)
+                to_rem = np.where(np.diff(breaks) < 20)[0][0] + 1
                 breaks = list(breaks)
-                del breaks[remove]
+                del breaks[to_rem]
+                print("**chain collapse", to_rem)
                 num_breaks -= 1
-                breaks = np.array(breaks, dtype=np.int64)
+                breaks = np.array(breaks)
 
-            elif len(breaks) == len(break_points[i]):
-                if np.sum(np.abs((breaks - break_points[i]))) <= num_breaks-1:
+            if len(breaks) == len(break_points[-1]):
+                print('checking convergence', k)
+                if np.sum(np.abs((breaks - break_points[-1]))) <= num_breaks:
                     print('Converged')
                     break
 
@@ -360,7 +378,7 @@ def learn_breakpoint(ys, num_breaks, starting_params, percentage=98):
             num_breaks -= 1
             breaks = np.concatenate([[0], np.arange(T//num_breaks, T, T//num_breaks)[:num_breaks-1], [T]])
             break_points.append(breaks)
-            print("SVD Converge Caught", num_breaks)
+            print("**SVD Converge Caught", num_breaks)
             continue
 
     return {
@@ -373,8 +391,10 @@ def update_img_time(n, cap, im, ann):
 
     ret,frame = cap.read()
 
-    # TODO make this a value in min:sec
-    ann.set_text('frame: %0.2f'%(n/60))
+    min_ = n//60
+    sec_ = n - min_*60
+
+    ann.set_text("frame: %i:%02d min" % (min_, sec_))
 
     if ret==True:
         im.set_data(frame[864:1080,0:384])
@@ -398,7 +418,7 @@ def get_mini_view_video(fname_mov, fname_csv):
 
     im = ax.imshow(frame[864:1080,0:384])
     fig.set_size_inches([5,5])
-    ann = ax.annotate('frame: %0.2f'%0, xy=[0,0], xytext=[0,0])
+    ann = ax.annotate("frame: %i:%02d min" % (0, 0), xy=[0,0], xytext=[0,0])
 
     ani = animation.FuncAnimation(fig, update_img_time, len(pd.read_csv(fname_csv)), fargs=(cap, im, ann), interval=500)
     writer = animation.writers['ffmpeg'](fps=10)
@@ -407,17 +427,17 @@ def get_mini_view_video(fname_mov, fname_csv):
 
     return True
 
-def plot_data_and_boundaries(df, em_results, ax):
+def plot_data_and_boundaries(df, em_results, ax, **kwargs):
 
     ys = df.values
     times = em_results['breaks'][1:]
     times[-1] = len(ys)
     results = em_results['result_params']
 
-    water = [np.array([1,0,0,0,0])]
-    N = 5
+    N, A = N_A(**kwargs)
+    water = [np.zeros(N)]
+    water[0][0] = 1
     timesteps = np.arange(1,len(ys))
-    A = np.eye(5)
 
     Phi = results[0]['Phi']
 
@@ -434,8 +454,8 @@ def plot_data_and_boundaries(df, em_results, ax):
 
     water = np.array(water)
 
-    c = ['b', 'g', 'r', 'purple', 'gold']
-    labels=['waterfall', 'desert', 'plains', 'jungle', 'wetlands']
+    c = ['b', 'g', 'r', 'purple', 'gold', 'pink']
+    labels=['waterfall', 'desert', 'plains', 'jungle', 'wetlands', 'reservoir']
 
     for i in range(len(water[0])):
         ax.plot(water[:,i], c=c[i], ls='--')
@@ -444,7 +464,7 @@ def plot_data_and_boundaries(df, em_results, ax):
         ax.axvline(j, c='black')
         min_ = j//60
         sec_ = (j - min_*60)
-        ax.annotate('%i:%imin'%(min_,sec_), xy=(j, 1), xytext=(j-20, 1.1),
+        ax.annotate("%i:%02d min" % (min_, sec_), xy=(j, 1), xytext=(j-20, 1.1),
             arrowprops=dict(facecolor='black', shrink=0.05),
             )
 
