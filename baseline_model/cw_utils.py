@@ -2,11 +2,13 @@
 
 import numpy as np
 import scipy as sp
+import scipy.stats as stats
 import pandas as pd
 import copy
 import cv2
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
+import pickle
 
 
 def N_A(**kwargs):
@@ -229,9 +231,10 @@ def MaximisationUpdate(ys, fwd_params, bkwd_params, Phi, **kwargs):
         S_1_0 += x_n_t.dot(x_n_tmin1.T) + P_n_t_tmin1
         S_0_0 += x_n_tmin1.dot(x_n_tmin1.T) + P_n_tmin1
 
-    S_0_0_inv = np.linalg.pinv(S_0_0)
+    reg_ = 5e-2
+    S_0_0_inv = np.linalg.pinv(S_0_0 + reg_*np.eye(N))
 
-    Phi_j = S_1_0.dot(S_0_0_inv)
+    Phi_j = (S_1_0+reg_*np.eye(N)).dot(S_0_0_inv)
     Q_j = 1/(n) * (S_1_1 - S_1_0.dot(S_0_0_inv).dot(S_1_0.T))
 
     for i, row in enumerate(Q_j):
@@ -304,6 +307,7 @@ def ExpectationMaximisation(ys, starting_params, **kwargs):
 def learn_breakpoint(ys, num_breaks, starting_params, percentage=98, sensitivity=2):
 
     T = len(ys)
+    N = len(ys[0])
     break_points = []
 
     # initialise the cut points
@@ -314,60 +318,102 @@ def learn_breakpoint(ys, num_breaks, starting_params, percentage=98, sensitivity
     penalty = 0
     for k in range(20):
 
-        print(breaks)
+        print('starting', breaks)
         result_params, fwd_filts = [], []
 
         try:
+            new_breaks = []
             for j in range(1, len(breaks)):
 
                 p_, _ = ExpectationMaximisation(ys[breaks[j-1]:breaks[j]], copy.deepcopy(starting_params), N=starting_params['N'])
                 result_params.append(p_)
 
-                fwd_filt = ForwardKalmanFilter(
-                            ys,
-                            p_['mu0'],
-                            p_['Sig0'],
-                            p_['Phi'],
-                            p_['Q'],
-                            p_['R'],
-                            N=starting_params['N']
-                        )
+                # fwd_filt = ForwardKalmanFilter(
+                #             ys,
+                #             p_['mu0'],
+                #             p_['Sig0'],
+                #             p_['Phi'],
+                #             p_['Q'],
+                #             p_['R'],
+                #             N=starting_params['N']
+                #         )
+                #
+                # # alpha = 3
+                # # beta = (3*2/len(breaks-1))*j
+                # # log_prior = np.log(1/T)
+                # prob = stats.multivariate_normal(mean=np.zeros(starting_params['N']), cov=1e-4*np.eye(starting_params['N'])).logpdf(fwd_filt['innovations'])
+                # errs.append(prob.reshape(-1,1)
 
-                fwd_filts.append(fwd_filt)
+            for j in range(1, len(breaks)-1):
 
-            errs = np.concatenate([np.sum(np.abs(fwd['innovations']), axis=1).reshape(-1,1) for fwd in fwd_filts], axis=1)
+                lp_l = np.zeros(T-1)
+                lp_r = np.zeros(T-1)
+
+                R = np.eye(N) * 1e-3
+                phi1 = result_params[j-1]['Phi']
+                phi2 = result_params[j]['Phi']
+
+                ts = np.arange(0,1,1/T)
+
+                alpha = j*1/(len(breaks)-1) * num_breaks + 1
+
+                # alpha = breaks[j]/T * num_breaks + 1
+                beta = num_breaks + 2 - alpha
+
+                # the 4 here means we have a prior on the number of chains that we expect
+                tot = alpha + beta
+                alpha = alpha/tot * (2+num_breaks)
+                beta = beta/tot * (2+num_breaks)
+
+                lp_l = np.zeros(T-1)
+                lp_r = np.zeros(T-1)
+
+                for t in range(1, T-1):
+                    lp_l[t] = lp_l[t-1] + stats.multivariate_normal(np.dot(phi1, ys[t-1]), R).logpdf(ys[t])
+                    lp_r[t] = lp_r[t-1] + stats.multivariate_normal(np.dot(phi2, ys[t-1]), R).logpdf(ys[t])
+
+                lp = stats.beta(alpha, beta).logpdf(ts[1:-1]) + np.ones(T-2)*lp_r[-1] + lp_l[:-1] - lp_r[:-1]
+                # lp = -np.log(T) + np.ones(T-2)*lp_r[-1] + lp_l[:-1] - lp_r[:-1]
+                # lp = np.ones(T-2)*np.log(1/T) + np.ones(T-2)*lp_r[-1] + lp_l[:-1] - lp_r[:-1]
+
+                new_break = np.argmax(lp) + 1
+                new_breaks.append(new_break)
 
             if num_breaks > 1:
                 ## TODO: Seriously you need to make a better boundary decision than this.
-                breaks = [0]
-                for i in range(1, num_breaks):
-
-                    if penalty <= np.floor(np.mean(np.diff(breaks) * 0.1)):
-                        penalty += sensitivity
-                    # how heavily are we penalising outliers?
-                    max_ = np.sort(np.where(np.argmin(errs, axis=1) == i-1))[0][-(penalty+1)]
-                    min_ = np.sort(np.where(np.argmin(errs, axis=1) == i))[0][penalty]
-                    # print('updating:', min_, max_)
-                    breaks.append((max_ + min_)//2)
-                breaks.append(T)
+                breaks = [0, T] + new_breaks
+                # for i in range(1, num_breaks):
+                #     penalty += sensitivity
+                #     if penalty > 8:
+                #         penalty = 8
+                #     # how heavily are we penalising outliers?
+                #     max_ = np.sort(np.where(np.argmax(errs, axis=1) == i-1))[0][-(penalty+1)]
+                #     min_ = np.sort(np.where(np.argmax(errs, axis=1) == i))[0][penalty]
+                #     # print('updating:', min_, max_)
+                #     breaks.append((max_ + min_)//2)
                 breaks = np.array(np.sort(breaks))
+                print('updated', breaks)
 
             else:
                 print('only two breaks')
                 breaks = np.concatenate([[0],[T]])
 
-            if len(np.where(np.diff(breaks) < 20)[0]) > 0:
+            if len(np.where(np.diff(breaks) < 30)[0]) > 0:
 
-                to_rem = np.where(np.diff(breaks) < 20)[0][0] + 1
+                to_rem = np.where(np.diff(breaks) < 30)[0][0] + 1
                 breaks = list(breaks)
                 del breaks[to_rem]
                 print("**chain collapse", to_rem)
                 num_breaks -= 1
-                breaks = np.array(breaks)
+                # breaks = np.array(breaks)
+                # num_breaks -= 1
+                # breaks = np.concatenate([[0], np.arange(T//num_breaks, T, T//num_breaks)[:num_breaks-1], [T]])
+                break_points.append(breaks)
+                continue
 
             if len(breaks) == len(break_points[-1]):
                 print('checking convergence', k)
-                if np.sum(np.abs((breaks - break_points[-1]))) <= num_breaks:
+                if np.sum(np.abs((breaks - break_points[-1]))) <= 4:
                     print('Converged')
                     break
 
@@ -435,8 +481,13 @@ def plot_data_and_boundaries(df, em_results, ax, **kwargs):
     results = em_results['result_params']
 
     N, A = N_A(**kwargs)
-    water = [np.zeros(N)]
-    water[0][0] = 1
+
+    if 'water' in kwargs:
+        water = kwargs['water']
+    else:
+        water = [np.zeros(N)]
+        water[0][0] = 1
+
     timesteps = np.arange(1,len(ys))
 
     Phi = results[0]['Phi']
@@ -468,9 +519,90 @@ def plot_data_and_boundaries(df, em_results, ax, **kwargs):
             arrowprops=dict(facecolor='black', shrink=0.05),
             )
 
-    df.plot(ax=ax)
+    df.plot(ax=ax, color=c)
     ax.set_xticklabels([round(i/60,1) for i in ax.get_xticks()])
 
     ax.set_ylabel('Normalised Water Level')
     ax.set_xlabel('Time (min)')
     return ax
+
+
+def stan_sampled(df, M=4, sw=[]):
+    T = df.shape[0]
+    N = df.shape[1]
+
+    # initialise the switches uniformly
+    if len(sw) <= 0:
+        sw = np.array([i for i in range(0,T,T//(M+1))][:-1] + [T])
+
+    with open('./../stan/known_switches_unknown_params.pkl', 'rb') as f:
+        ssm = pickle.load(f)
+        data = {
+            'y': df.values,
+            'N': N,
+            'T': T,
+            'M': len(sw)-1,
+            'S': sw[1:]
+        }
+        fit = ssm.sampling(data=data, iter=2000, chains=4)
+
+    la = fit.extract(permuted=True)
+    phis = la.get('phi').mean(axis=0)
+
+    fits = []
+    with open('./../stan/unknown_switches_known_params.pkl', 'rb') as f:
+        ssm = pickle.load(f)
+
+        for i in range(len(sw)-2):
+            data = {'y': df.values,
+                'N': N,
+                'T': T,
+                'M': 2,
+                'phi': phis[i:i+2,:],
+                'sw': sw[i+1],
+                'p': 15 }
+
+            fits.append(ssm.sampling(data=data, iter=2000, chains=4, seed=12))
+
+    new_splits = set()
+    for fit in fits:
+
+        la = fit.extract(permuted=True)
+        means = np.mean(la.get('lp'), axis=0)
+        new_max = np.argmax(means)
+        print(new_max)
+        if new_max < 20:
+            new_max = 0
+        elif new_max > T-20:
+            new_max = T
+
+        if not (np.abs(np.array(list(new_splits)) - new_max) < 15).any():
+            new_splits.add(new_max)
+
+    new_splits.add(0)
+    new_splits.add(T)
+
+    new_splits = np.sort(list(new_splits))
+
+    sw = new_splits
+
+    with open('./../stan/known_switches_unknown_params.pkl', 'rb') as f:
+        ssm = pickle.load(f)
+        data = {
+            'y': df.values,
+            'N': N,
+            'T': T,
+            'M': len(sw)-1,
+            'S': sw[1:]
+        }
+        fit = ssm.sampling(data=data, iter=2000, chains=4)
+
+    la = fit.extract(permuted=True)
+    stan_results = {}
+    phis = la.get('phi').mean(axis=0)
+
+    return {
+        'breaks':  np.sort(sw),
+        'result_params': [{'Phi':p} for p in la.get('phi').mean(axis=0)],
+        'fit': fit
+    }
