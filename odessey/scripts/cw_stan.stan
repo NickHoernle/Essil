@@ -16,16 +16,16 @@ functions {
       // other water
       next_water_ = (curr_state[biome] +
                     tree_drink_rate*(curr_state[desert+5] + curr_state[plains+5] + curr_state[jungle+5] + curr_state[wetlands+5]) + //water from tree evaporation
-                    evaporation_rate*(curr_state[desert] + curr_state[plains] + 0.75*curr_state[jungle] + 0.25*curr_state[wetlands]) + // water from normal evaporation
+                    evaporation_rate*(curr_state[desert] + curr_state[plains] + curr_state[jungle] + curr_state[wetlands]) + // water from normal evaporation
                     (thetas[desert+5]*curr_state[desert] + thetas[plains+5]*curr_state[plains] + thetas[jungle+5]*curr_state[jungle] + thetas[wetlands+5]*curr_state[wetlands]) + // water released from biomes from users
                     thetas[reservoir]*curr_state[reservoir] - // water released from reservoir from users
                     (thetas[desert]*curr_state[1] + thetas[plains]*curr_state[1] + thetas[jungle]*curr_state[1] + thetas[wetlands]*curr_state[1])); // water directed into biomes
     }
     else if (biome == 6) {
       // reservoir water
-      next_water_ = (curr_state[biome] - thetas[biome]*curr_state[biome] + // water_out user
-                     0.75*tree_drink_rate*(curr_state[wetlands+5]) +
-                     0.25*tree_drink_rate*(curr_state[jungle+5]));
+      next_water_ = (curr_state[biome] - thetas[biome]*curr_state[biome]);// + // water_out user
+                     // 0.75*tree_drink_rate*(curr_state[wetlands+5]) +
+                     // 0.25*tree_drink_rate*(curr_state[jungle+5]));
     }
     else {
       // biome water
@@ -42,8 +42,10 @@ functions {
   vector get_error(vector current_state, vector previous_state, vector emission_param, real evaporation, real tree_drink, int N) {
 
     vector[N] err;
-    for (n in 1:N)
+    for (n in 2:N)
+      // the error is the actual water - the predicted water using the previous state and the current number of trees
       err[n] = current_state[n] - next_water(previous_state, append_row(evaporation, emission_param), tree_drink, n);
+    err[1] = next_water(previous_state, append_row(evaporation, emission_param), tree_drink, 1) - current_state[1];
     return err;
   }
 
@@ -70,7 +72,7 @@ data {
   int<lower=0> unsup_count;
   real<lower=0, upper=1> theta_trans;
 
-  real<lower=0> priors[2];
+  real<lower=0> lambda;
 }
 
 transformed data {
@@ -92,26 +94,41 @@ parameters {
   real<lower=0, upper=1> evaporation;
   real<lower=0, upper=1> tree_drink;
 
-  vector<lower=0, upper=1>[9] theta_emis[M];
+  simplex[4] water_in[M];
+  vector<lower=-1, upper=1>[5] water_out[M];
+  simplex[4] plan_prior;
 
+  real<lower=0, upper=1> waterfall_rate;
   real<lower=0> r;
 }
 
 transformed parameters{
+  vector<lower=0, upper=1>[9] theta_emis[M];
+
+  for (m in 1:M){
+    for (i in 1:4)
+      theta_emis[m][i] = waterfall_rate * water_in[m][i];
+    for (i in 1:5)
+      theta_emis[m][4+i] = fabs(water_out[m][i]);
+  }
 }
 
 model {
   evaporation ~ beta(1,5);
   tree_drink ~ beta(1,5);
+  waterfall_rate ~ beta(1,5);
+  rain_rate ~ beta(1,5);
   r ~ normal(0,0.01);
+  plan_prior ~ dirichlet(to_vector([1,1,1,1]));
 
   for (m in 1:M) {
     // TODO: These are not independent and identically distributed random variables.
     // They are dependent random variables. I need a way to model them as such.
-    theta_emis[m] ~ beta(priors[1], priors[2]);
-  }
+    water_in[m] ~ dirichlet(4*plan_prior);
 
-  rain_rate  ~ beta(1,5);
+    water_out[m][5:] ~ normal(0, 0.01);
+    target += - lambda * sum(fabs(water_out[m][2:]));
+  }
 
   {
     vector[N] err;
@@ -140,7 +157,7 @@ model {
         for (m in 0:1) {
           for (j in 0:1) {
             err = get_error(y[t], y[t-1], theta_emis[last_state+m], evaporation, tree_drink, N);
-            lp[j+1] = gamma[t-1, last_state+j] + log(phi_trans[last_state+j, last_state+m]) + normal_lpdf(err | rep_vector(0, N), r+expected_rain);
+            lp[j+1] = gamma[t-1, last_state+j] + log(phi_trans[last_state+j, last_state+m]) + skew_normal_lpdf(err | rep_vector(0, N), rep_vector(r, N), expected_rain);
           }
           gamma[t, last_state+m] = log_sum_exp(lp);
           if (t >= last_time_step + unsup_count){ target += log_sum_exp(lp); }
@@ -149,7 +166,8 @@ model {
       } else {
       // here we are supervised and thus can sample the transition matrices for the hidden chain
         err = get_error(y[t], y[t-1], theta_emis[z[t]], evaporation, tree_drink, N);
-        err ~ normal(rep_vector(0, N), r+expected_rain);
+        // there is the probability of rain in the biomes
+        err ~ skew_normal(rep_vector(0, N), rep_vector(r, N), expected_rain);
         last_state = z[t];
         last_time_step = t;
 
@@ -189,7 +207,7 @@ generated quantities {
           else {
 
             err = get_error(y[t], y[t-1], theta_emis[m], evaporation, tree_drink, N);
-            logp = best_logp[t-1, j] + log(phi_trans[j, m]) + normal_lpdf(err[2:] | rep_vector(0,N-1), r+expected_rain);
+            logp = best_logp[t-1, j] + log(phi_trans[j, m]) + skew_normal_lpdf(err[2:] | rep_vector(0, N-1), rep_vector(r, N-1), expected_rain);
 
           }
           if (logp > best_logp[t, m]) {
