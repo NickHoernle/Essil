@@ -160,7 +160,7 @@ model {
         for (m in 0:1) {
           for (j in 0:1) {
             err = get_error(y[t], y[t-1], theta_emis[last_state+m], evaporation, tree_drink, N);
-            lp[j+1] = gamma[t-1, last_state+j] + log(phi_trans[last_state+j, last_state+m]) + skew_normal_lpdf(err | rep_vector(0, N), rep_vector(r, N), expected_rain);
+            lp[j+1] = gamma[t-1, last_state+j] + log(phi_trans[last_state+j, last_state+m]) + double_exponential_lpdf(err | rep_vector(0, N), rep_vector(r, N));
           }
           gamma[t, last_state+m] = log_sum_exp(lp);
           if (t >= last_time_step + unsup_count){ target += log_sum_exp(lp); }
@@ -170,7 +170,7 @@ model {
       // here we are supervised and thus can sample the transition matrices for the hidden chain
         err = get_error(y[t], y[t-1], theta_emis[z[t]], evaporation, tree_drink, N);
         // there is the probability of rain in the biomes
-        err ~ skew_normal(rep_vector(0, N), rep_vector(r, N), expected_rain);
+        err ~ double_exponential(rep_vector(0, N), rep_vector(r, N));
         last_state = z[t];
         last_time_step = t;
 
@@ -210,7 +210,7 @@ generated quantities {
           else {
 
             err = get_error(y[t], y[t-1], theta_emis[m], evaporation, tree_drink, N);
-            logp = best_logp[t-1, j] + log(phi_trans[j, m]) + skew_normal_lpdf(err[2:] | rep_vector(0, N-1), rep_vector(r, N-1), expected_rain);
+            logp = best_logp[t-1, j] + log(phi_trans[j, m]) + double_exponential_lpdf(err[2:] | rep_vector(0, N-1), rep_vector(r, N-1));
 
           }
           if (logp > best_logp[t, m]) {
