@@ -55,7 +55,7 @@ functions {
 
     for (n in 2:N)
       rain[n] = rain_rate*clouds[n];
-    rain[1] = rain_rate*sum(rain[2:]); // accounted for with the evaporation above
+    rain[1] = rain_rate*max(rain[2:]); // accounted for with the evaporation above
 
     return rain;
   }
@@ -89,16 +89,18 @@ transformed data {
 
 parameters {
   // real<lower=0> r;
-  real<lower=0, upper=1> rain_rate;
+  real<lower=0> rain_bias;
+  real<lower=0, upper=1> water_flow_rate;
 
   real<lower=0, upper=1> evaporation;
   real<lower=0, upper=1> tree_drink;
 
   simplex[4] water_in[M];
-  vector<lower=-1, upper=1>[5] water_out[M];
+  vector<lower=0, upper=1>[5] water_out[M];
   simplex[4] plan_prior;
 
   real<lower=0, upper=1> waterfall_rate;
+  // real<lower=0, upper=1> water_out_rate;
   real<lower=0> r;
 }
 
@@ -109,25 +111,26 @@ transformed parameters{
     for (i in 1:4)
       theta_emis[m][i] = waterfall_rate * water_in[m][i];
     for (i in 1:5)
-      theta_emis[m][4+i] = fabs(water_out[m][i]);
+      theta_emis[m][4+i] = water_flow_rate * water_out[m][i];
   }
 }
 
 model {
-  evaporation ~ beta(1,5);
-  tree_drink ~ beta(1,5);
-  waterfall_rate ~ beta(1,5);
-  rain_rate ~ beta(1,5);
+  evaporation ~ beta(1e-1,5);
+  tree_drink ~ beta(1e-1,5);
+  waterfall_rate ~ beta(1e-1,5);
+  water_flow_rate ~ beta(1e-1,5);
+  rain_bias ~ normal(10,10);
   r ~ normal(0,0.01);
+
   plan_prior ~ dirichlet(to_vector([1,1,1,1]));
 
   for (m in 1:M) {
-    // TODO: These are not independent and identically distributed random variables.
-    // They are dependent random variables. I need a way to model them as such.
-    water_in[m] ~ dirichlet(4*plan_prior);
 
-    water_out[m][5:] ~ normal(0, 0.01);
-    target += - lambda * sum(fabs(water_out[m][2:]));
+    water_in[m] ~ dirichlet(16*plan_prior);
+    for (i in 1:5)
+      water_out[m][i] ~ beta(1e-1,5);
+    target += - lambda * fabs(water_out[m][2:]);
   }
 
   {
@@ -148,7 +151,7 @@ model {
 
     for (t in 2:T){
 
-      expected_rain = get_expected_rain(y[t][11:16], rain_rate, N);
+      expected_rain = get_expected_rain(y[t][11:16], rain_bias, N);
 
       if (z[t] == -1) {
       // this is the unsupervised part of the model
@@ -195,7 +198,7 @@ generated quantities {
 
     for (t in 2:T) {
 
-      expected_rain = get_expected_rain(y[t][11:16], rain_rate, N)[2:];
+      expected_rain = get_expected_rain(y[t][11:16], rain_bias, N)[2:];
 
       for (m in 1:M) {
         best_logp[t, m] = negative_infinity();
