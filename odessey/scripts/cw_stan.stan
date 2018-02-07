@@ -54,8 +54,8 @@ functions {
     vector[N] rain;
 
     for (n in 2:N)
-      rain[n] = rain_rate*clouds[n];
-    rain[1] = rain_rate*max(rain[2:]); // accounted for with the evaporation above
+      rain[n] = rain_rate * clouds[n];
+    rain[1] = rain_rate * max(clouds); // accounted for with the evaporation above
 
     return rain;
   }
@@ -73,6 +73,7 @@ data {
   real<lower=0, upper=1> theta_trans;
 
   real<lower=0> lambda;
+  real<lower=0> precision;
 }
 
 transformed data {
@@ -89,19 +90,16 @@ transformed data {
 
 parameters {
   // real<lower=0> r;
-  real<lower=0> rain_bias;
   real<lower=0, upper=1> water_flow_rate;
-
+  // real<lower=0, upper=1> waterfall_rate;
   real<lower=0, upper=1> evaporation;
   real<lower=0, upper=1> tree_drink;
 
   simplex[4] water_in[M];
-  vector<lower=0, upper=1>[5] water_out[M];
+  vector<lower=-20, upper=20>[5] water_out[M];
   simplex[4] plan_prior;
 
-  real<lower=0, upper=1> waterfall_rate;
-  // real<lower=0, upper=1> water_out_rate;
-  real<lower=0> r;
+  real<lower=1e-10> r; // noise distribution for each biome
 }
 
 transformed parameters{
@@ -109,19 +107,19 @@ transformed parameters{
 
   for (m in 1:M){
     for (i in 1:4)
-      theta_emis[m][i] = waterfall_rate * water_in[m][i];
+      theta_emis[m][i] = water_flow_rate * water_in[m][i];
     for (i in 1:5)
-      theta_emis[m][4+i] = water_flow_rate * water_out[m][i];
+      theta_emis[m][4+i] = water_flow_rate * (1/(1+exp(-(water_out[m][i] - 10))));
   }
 }
 
 model {
-  evaporation ~ beta(1e-1,5);
-  tree_drink ~ beta(1e-1,5);
-  waterfall_rate ~ beta(1e-1,5);
-  water_flow_rate ~ beta(1e-1,5);
-  rain_bias ~ normal(10,10);
-  r ~ normal(0,0.01);
+  evaporation ~ beta(1,15);
+  tree_drink ~ beta(1,15);
+  // waterfall_rate ~ beta(1,15);
+  water_flow_rate ~ beta(1,15);
+
+  r ~ cauchy(0,1/precision);
 
   plan_prior ~ dirichlet(to_vector([1,1,1,1]));
 
@@ -129,8 +127,8 @@ model {
 
     water_in[m] ~ dirichlet(16*plan_prior);
     for (i in 1:5)
-      water_out[m][i] ~ beta(1e-1,5);
-    target += - lambda * fabs(water_out[m][2:]);
+      // penalise the model for using these parameters
+      water_out[m][i] ~ double_exponential(0,1/lambda);
   }
 
   {
@@ -151,7 +149,7 @@ model {
 
     for (t in 2:T){
 
-      expected_rain = get_expected_rain(y[t][11:16], rain_bias, N);
+      expected_rain = get_expected_rain(y[t][11:16], r, N);
 
       if (z[t] == -1) {
       // this is the unsupervised part of the model
@@ -160,7 +158,7 @@ model {
         for (m in 0:1) {
           for (j in 0:1) {
             err = get_error(y[t], y[t-1], theta_emis[last_state+m], evaporation, tree_drink, N);
-            lp[j+1] = gamma[t-1, last_state+j] + log(phi_trans[last_state+j, last_state+m]) + double_exponential_lpdf(err | rep_vector(0, N), rep_vector(r, N));
+            lp[j+1] = gamma[t-1, last_state+j] + log(phi_trans[last_state+j, last_state+m]) + normal_lpdf(err | rep_vector(0, N), expected_rain);
           }
           gamma[t, last_state+m] = log_sum_exp(lp);
           if (t >= last_time_step + unsup_count){ target += log_sum_exp(lp); }
@@ -170,7 +168,7 @@ model {
       // here we are supervised and thus can sample the transition matrices for the hidden chain
         err = get_error(y[t], y[t-1], theta_emis[z[t]], evaporation, tree_drink, N);
         // there is the probability of rain in the biomes
-        err ~ double_exponential(rep_vector(0, N), rep_vector(r, N));
+        err ~ normal(rep_vector(0, N), expected_rain);
         last_state = z[t];
         last_time_step = t;
 
@@ -198,7 +196,7 @@ generated quantities {
 
     for (t in 2:T) {
 
-      expected_rain = get_expected_rain(y[t][11:16], rain_bias, N)[2:];
+      expected_rain = get_expected_rain(y[t][11:16], r, N)[2:];
 
       for (m in 1:M) {
         best_logp[t, m] = negative_infinity();
@@ -210,7 +208,7 @@ generated quantities {
           else {
 
             err = get_error(y[t], y[t-1], theta_emis[m], evaporation, tree_drink, N);
-            logp = best_logp[t-1, j] + log(phi_trans[j, m]) + double_exponential_lpdf(err[2:] | rep_vector(0, N-1), rep_vector(r, N-1));
+            logp = best_logp[t-1, j] + log(phi_trans[j, m]) + normal_lpdf(err[2:] | rep_vector(0, N-1), expected_rain);
 
           }
           if (logp > best_logp[t, m]) {
