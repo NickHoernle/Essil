@@ -17,13 +17,13 @@ functions {
       next_water_ = (curr_state[biome] +
                     tree_drink_rate*(curr_state[desert+5] + curr_state[plains+5] + curr_state[jungle+5] + curr_state[wetlands+5]) + //water from tree evaporation
                     evaporation_rate*(curr_state[desert] + curr_state[plains] + curr_state[jungle] + curr_state[wetlands]) + // water from normal evaporation
-                    (thetas[desert+5]*curr_state[desert] + thetas[plains+5]*curr_state[plains] + thetas[jungle+5]*curr_state[jungle] + thetas[wetlands+5]*curr_state[wetlands]) + // water released from biomes from users
-                    thetas[reservoir]*curr_state[reservoir] - // water released from reservoir from users
+                    (thetas[desert+5] + thetas[plains+5] + thetas[jungle+5] + thetas[wetlands+5]) + // water released from biomes from users
+                    thetas[reservoir] - // water released from reservoir from users
                     (thetas[desert]*curr_state[1] + thetas[plains]*curr_state[1] + thetas[jungle]*curr_state[1] + thetas[wetlands]*curr_state[1])); // water directed into biomes
     }
     else if (biome == 6) {
       // reservoir water
-      next_water_ = (curr_state[biome] - thetas[biome]*curr_state[biome]);// + // water_out user
+      next_water_ = (curr_state[biome] - thetas[biome]);// + // water_out user
                      // 0.75*tree_drink_rate*(curr_state[wetlands+5]) +
                      // 0.25*tree_drink_rate*(curr_state[jungle+5]));
     }
@@ -33,7 +33,7 @@ functions {
                     thetas[biome]*curr_state[1] -           // water_in (water from waterfall) user
                     evaporation_rate*curr_state[biome] -    // water_out evaporation
                     tree_drink_rate*curr_state[biome+5] -   // water_out trees
-                    thetas[biome+5]*curr_state[biome]);     // water_out (water from the current state) user
+                    thetas[biome+5]);     // water_out (water from the current state) user
     }
 
     return next_water_;
@@ -90,43 +90,45 @@ transformed data {
 
 parameters {
   // real<lower=0> r;
-  real<lower=0, upper=1> water_flow_rate;
-  // real<lower=0, upper=1> waterfall_rate;
-  real<lower=0, upper=1> evaporation;
-  real<lower=0, upper=1> tree_drink;
+  real<lower=-10, upper=5> water_fall_rate_l;
+
+  real<lower=-10, upper=5> evaporation_l;
+  real<lower=-10, upper=5> tree_drink_l;
 
   simplex[4] water_in[M];
   vector<lower=-20, upper=20>[5] water_out[M];
-  simplex[4] plan_prior;
+  vector<lower=0>[4] plan_prior;
 
   real<lower=1e-10> r; // noise distribution for each biome
 }
 
 transformed parameters{
   vector<lower=0, upper=1>[9] theta_emis[M];
+  real<lower=0, upper=1> water_fall_rate = 1/(1+exp(-water_fall_rate_l));
+  real<lower=0, upper=1> evaporation = 1/(1+exp(-evaporation_l));
+  real<lower=0, upper=1> tree_drink = 1/(1+exp(-tree_drink_l));
 
   for (m in 1:M){
     for (i in 1:4)
-      theta_emis[m][i] = water_flow_rate * water_in[m][i];
+      theta_emis[m][i] = water_fall_rate * water_in[m][i];
     for (i in 1:5)
-      theta_emis[m][4+i] = water_flow_rate * (1/(1+exp(-(water_out[m][i] - 10))));
+      theta_emis[m][4+i] = (1/(1+exp(-(water_out[m][i] - 10))));
   }
 }
 
 model {
-  evaporation ~ beta(1,15);
-  tree_drink ~ beta(1,15);
-  // waterfall_rate ~ beta(1,15);
-  water_flow_rate ~ beta(1,15);
+  evaporation_l ~ normal(0,5);
+  tree_drink_l ~ normal(0,5);
+  water_fall_rate_l ~ normal(0,5);
 
   r ~ cauchy(0,1/precision);
-
-  plan_prior ~ dirichlet(to_vector([1,1,1,1]));
+  plan_prior ~ chi_square(6);
 
   for (m in 1:M) {
 
-    water_in[m] ~ dirichlet(16*plan_prior);
-    for (i in 1:5)
+    water_in[m] ~ dirichlet(plan_prior);
+    water_out[m][1] ~ double_exponential(0,5);
+    for (i in 2:5)
       // penalise the model for using these parameters
       water_out[m][i] ~ double_exponential(0,1/lambda);
   }
