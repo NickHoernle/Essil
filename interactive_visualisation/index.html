@@ -1,0 +1,122 @@
+<!doctype html>
+<html class="no-js" lang="">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <title></title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <link rel="manifest" href="site.webmanifest">
+        <link rel="apple-touch-icon" href="icon.png">
+        <!-- Place favicon.ico in the root directory -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+
+        <link rel="stylesheet" href="css/normalize.css">
+        <link rel="stylesheet" href="css/main.css">
+        <link rel="stylesheet" href="css/jquery.timepicker.min.css">
+    </head>
+    <body>
+        <!--[if lte IE 9]>
+            <p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience and security.</p>
+        <![endif]-->
+
+        <div class="container">
+            <h1>Connected Worlds Expert Validation</h1>
+            <p>
+                <select name="basic" id="ex-basic">
+                    <!--<option value="" hidden>Select session</option>-->
+                    <option value="1">Session 1 - 11/03/2018</option>
+                    <option value="2">Session 2 - 16/03/2018</option>
+                    <option value="3">Session 3</option>
+                    <option value="4">Session 4</option>
+                </select>
+            </p>
+
+            <p>You see below a clip from the selected session. This clip is split into two periods that are characterised in `Description'. There exists a time where the system dynamics change from the first period to the next. Please select the most appropriate timestamp that best separates the two period descriptions.</p>
+
+            <div class="btn-group">
+                <button id="prev_period" type="button" class="btn btn-default"> <span class="glyphicon glyphicon-step-backward"></span> Previous Period</button>
+                <button id="next_period" type="button" class="btn btn-default">Next Period  <span class="glyphicon glyphicon-step-forward"></span></button>
+            </div>
+
+            <table>
+                <col width="100">
+                <col width="400">
+                <col width="800">
+                <thead>
+                <tr>
+                    <th><h3>Video</h3></th>
+                    <th></th>
+                    <th><h3>Description</h3></th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>
+                        <ul class="legend">
+                            <div class="coloured">
+                            <h5>Key:</h5>
+                            <li><span class="desert"></span> Desert</li>
+                            <li><span class="plains"></span> Plains</li>
+                            <li><span class="jungle"></span> Jungle</li>
+                            <li><span class="reservoir"></span> Reservoir</li>
+                            <li><span class="wetlands"></span> Wetlands</li>
+                            </div>
+                        </ul>
+                        <p id="time_stamp"></p>
+                        <button id="replay_video" type="button" class="btn btn-default">Replay Video <span class="glyphicon glyphicon-refresh"></span></button>
+                    </td>
+                    <td>
+                        <div class="containerGlobalView">
+                            <video id="globalView" width="1000">
+                                <source src=""
+                                    type="video/mp4">
+                                <!--<source src="movie.ogg" type="video/ogg">-->
+                                Your browser does not support the video tag.
+                            </video>
+                            <!--<p id="'timestamp">Time:</p>-->
+                        </div>
+                    </td>
+                    <td class="explanation">
+                        <section class="explanation_container">
+                            <div id="explanation1"></div>
+                            <div id="explanation2"></div>
+                        </section>
+                    </td>
+                </tr>
+                <tr>
+                    <td><p>Select time of change:</p></td>
+                    <td id="time_picker_td">
+                        <!--<span id="time_picker" class="ui-timepicker-input"></span>-->
+                        <!--<button id="openSpanExample">Pick Time</button>-->
+                        <!--<input id="time_picker" type="text" class="time ui-timepicker-input" autocomplete="off" >-->
+                    </td>
+                    <td><div id="time_picker_output"></div></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+
+        <script src="js/vendor/modernizr-3.5.0.min.js"></script>
+        <script src="https://code.jquery.com/jquery-3.2.1.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+        <script>window.jQuery || document.write('<script src="js/vendor/jquery-3.2.1.min.js"><\/script>')</script>
+        <script src="js/plugins.js"></script>
+        <script src="./js/jquery.timepicker.min.js"></script>
+        <script src="js/main.js"></script>
+        <!-- Latest compiled and minified CSS -->
+
+        <!-- jQuery library -->
+        <!--<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>-->
+
+        <!-- Latest compiled JavaScript -->
+        <!--<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>-->
+        <!-- Google Analytics: change UA-XXXXX-Y to be your site's ID. -->
+        <!--<script>-->
+            <!--window.ga=function(){ga.q.push(arguments)};ga.q=[];ga.l=+new Date;-->
+            <!--ga('create','UA-XXXXX-Y','auto');ga('send','pageview')-->
+        <!--</script>-->
+        <!--<script src="https://www.google-analytics.com/analytics.js" async defer></script>-->
+    </body>
+</html>
